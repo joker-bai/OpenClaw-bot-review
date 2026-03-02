@@ -83,6 +83,74 @@ function formatMs(ms: number): string {
   return (ms / 1000).toFixed(1) + "s";
 }
 
+async function copyText(text: string): Promise<boolean> {
+  try {
+    if (navigator.clipboard?.writeText) {
+      await navigator.clipboard.writeText(text);
+      return true;
+    }
+  } catch {
+    // Fallback below
+  }
+
+  try {
+    const textarea = document.createElement("textarea");
+    textarea.value = text;
+    textarea.setAttribute("readonly", "");
+    textarea.style.position = "fixed";
+    textarea.style.opacity = "0";
+    document.body.appendChild(textarea);
+    textarea.select();
+    const ok = document.execCommand("copy");
+    document.body.removeChild(textarea);
+    return ok;
+  } catch {
+    return false;
+  }
+}
+
+function ErrorStatusWithCopy({ error, className }: { error?: string; className?: string }) {
+  const [copyState, setCopyState] = useState<"idle" | "copied" | "failed">("idle");
+  const errorText = (error || "Unknown error").trim() || "Unknown error";
+
+  const onCopy = async (e: React.MouseEvent<HTMLButtonElement>) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const ok = await copyText(errorText);
+    setCopyState(ok ? "copied" : "failed");
+  };
+
+  return (
+    <span
+      className={`group relative inline-flex items-center ${className || ""}`}
+      onMouseLeave={() => setCopyState("idle")}
+    >
+      <span className="text-red-400 text-sm cursor-help">❌</span>
+      <span
+        aria-hidden="true"
+        className="absolute left-full top-1/2 z-40 hidden h-8 w-2 -translate-y-1/2 bg-transparent group-hover:block group-focus-within:block"
+      />
+      <span className="absolute left-full top-1/2 z-50 ml-2 hidden w-max max-w-[min(24rem,calc(100vw-1rem))] -translate-y-1/2 rounded-md border border-red-500/30 bg-[var(--card)] px-2 py-1.5 text-xs text-[var(--text)] shadow-lg group-hover:block group-focus-within:block">
+        <span className="inline-flex items-start gap-1.5">
+          <span className="inline-flex items-center gap-1">
+            <button
+              type="button"
+              onClick={onCopy}
+              className="rounded border border-[var(--border)] px-1.5 py-0.5 text-[10px] text-[var(--text-muted)] hover:text-[var(--text)] hover:border-[var(--accent)]"
+            >
+              {copyState === "copied" ? "已复制" : "复制"}
+            </button>
+            {copyState === "failed" && (
+              <span className="text-[10px] text-amber-300">复制失败</span>
+            )}
+          </span>
+          <span className="whitespace-pre-wrap break-words">{errorText}</span>
+        </span>
+      </span>
+    </span>
+  );
+}
+
 // 趋势折线图
 function TrendChart({ data, lines, height = 180, t }: { data: DayStat[]; lines: { key: keyof DayStat; color: string; label: string }[]; height?: number; t: TFunc }) {
   if (data.length === 0) return <div className="flex items-center justify-center h-32 text-[var(--text-muted)] text-sm">{t("common.noData")}</div>;
@@ -264,7 +332,7 @@ function PlatformBadge({ platform, agentId, gatewayPort, gatewayToken, gatewayHo
       ) : testResult.ok ? (
         <span className="inline-flex w-5 justify-end text-green-400 text-sm cursor-help" title={`${testResult.elapsed}ms${testResult.detail ? ' · ' + testResult.detail : testResult.reply ? ' · ' + testResult.reply : ''}`}>✅</span>
       ) : (
-        <span className="inline-flex w-5 justify-end text-red-400 text-sm cursor-help" title={testResult.error || ''}>❌</span>
+        <ErrorStatusWithCopy error={testResult.error} className="w-5 justify-end" />
       )}
     </div>
   );
@@ -403,7 +471,7 @@ function AgentCard({ agent, gatewayPort, gatewayToken, gatewayHost, t, testResul
             ) : sessionTestResult.ok ? (
               <span className="text-green-400 text-sm cursor-help" title={`${sessionTestResult.elapsed}ms${sessionTestResult.reply ? ' · ' + sessionTestResult.reply : ''}`}>✅</span>
             ) : (
-              <span className="text-red-400 text-sm cursor-help" title={sessionTestResult.error || ''}>❌</span>
+              <ErrorStatusWithCopy error={sessionTestResult.error} />
             )}
           </div>
         </div>
@@ -418,7 +486,7 @@ function AgentCard({ agent, gatewayPort, gatewayToken, gatewayHost, t, testResul
             ) : testResult.ok ? (
               <span className="text-green-400 text-sm" title={`${testResult.elapsed}ms${testResult.text ? ' · ' + testResult.text : ''}`}>✅</span>
             ) : (
-              <span className="text-red-400 text-sm cursor-help" title={testResult.error || ''}>❌</span>
+              <ErrorStatusWithCopy error={testResult.error} />
             )}
           </div>
         </div>
@@ -442,7 +510,10 @@ function AgentCard({ agent, gatewayPort, gatewayToken, gatewayHost, t, testResul
                     ) : dmResult.ok ? (
                       <span className="text-green-400 text-sm cursor-help" title={`DM Session ${dmResult.elapsed}ms${dmResult.detail ? ' · ' + dmResult.detail : ''}`}>DM Session: ✅</span>
                     ) : (
-                      <span className="text-red-400 text-sm cursor-help" title={dmResult.error || ''}>DM Session: ❌</span>
+                      <span className="text-red-400 text-sm inline-flex items-center gap-1">
+                        DM Session:
+                        <ErrorStatusWithCopy error={dmResult.error} />
+                      </span>
                     )}
                   </div>
                 </div>
